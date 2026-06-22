@@ -1,0 +1,19 @@
+# Results and outputs
+results/
+*.xlsx
+*.png
+SEL_lesion_detail.csv
+_mni_manifest.csv
+
+# Neuroimaging data (don't commit patient data!)
+*.nii
+*.nii.gz
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store

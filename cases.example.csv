@@ -1,0 +1,3 @@
+CaseId,T1,SEL_mask,Lesion_baseline
+SUBJ001,/path/to/t1_001.nii.gz,/path/to/sel_001.nii.gz,/path/to/base_001.nii.gz
+SUBJ002,/path/to/t1_002.nii.gz,/path/to/sel_002.nii.gz,
