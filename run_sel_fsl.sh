@@ -167,4 +167,9 @@ fi
 echo "Running lateralization counting..." >&2
 "$PYTHON" "$PY_SCRIPT" --manifest "$MNI_MANIFEST" --no-resample --out "$OUT"
 
-echo "All done. Results in: $OUT" >&2
+ABS_OUT="$(cd "$OUT" && pwd)"
+echo "" >&2
+echo "All done. Results in: $ABS_OUT" >&2
+echo "  Excel:   $ABS_OUT/SEL_lateralization_results.xlsx" >&2
+echo "  Details: $ABS_OUT/SEL_lesion_detail.csv" >&2
+echo "  Chart:   $ABS_OUT/SEL_lateralization_chart.png" >&2
