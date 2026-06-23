@@ -221,8 +221,13 @@ def save_overlay(t1_img, sel_img, out_png, case_id):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from nilearn.image import reorder_img
 
-    # Images are already RAS-canonical at this point (axis 0=L-R, 1=P-A, 2=I-S).
+    # Force a clean RAS-aligned grid so axis 0=L-R, 1=P-A, 2=I-S
+    # regardless of input storage order or oblique affines.
+    t1_img = reorder_img(t1_img, resample="continuous")
+    sel_img = reorder_img(sel_img, resample="nearest")
+
     t1 = t1_img.get_fdata()
     sel = sel_img.get_fdata() > 0.5
     aff = t1_img.affine
@@ -238,15 +243,14 @@ def save_overlay(t1_img, sel_img, out_png, case_id):
     else:
         slices = np.linspace(t1.shape[2] * 0.3, t1.shape[2] * 0.7, 6).astype(int)
 
-    # In RAS canonical: axial slice = t1[:, :, z], displayed with
-    # rot90 to put anterior up; midline is a vertical line at x0_vox.
+    # RAS after reorder_img: t1[:, :, z] is an axial slice.
+    # np.rot90 (CCW 90°) puts anterior at top. After rotation, the original
+    # x-axis (axis 0) becomes columns in reverse, so midline shifts.
     fig, axes = plt.subplots(2, 3, figsize=(12, 8))
     for ax, z in zip(axes.ravel(), slices):
         ax.imshow(np.rot90(t1[:, :, z]), cmap="gray")
         overlay = np.ma.masked_where(~sel[:, :, z], sel[:, :, z])
         ax.imshow(np.rot90(overlay), cmap="autumn", alpha=0.8)
-        # rot90 flips axis-0 to become columns, so midline x-voxel maps to
-        # a vertical line at (shape[0]-1 - x0_vox) after rotation
         midline_col = t1.shape[0] - 1 - x0_vox
         ax.axvline(midline_col, color="cyan", lw=1, ls="--")
         ax.set_title(f"axial z={z}", fontsize=9)
@@ -338,16 +342,18 @@ def process_case(case_id, t1_path, sel_path, baseline_path, out_dir,
 
     if no_resample:
         # Inputs are ALREADY registered to MNI by an external tool (e.g. FSL
-        # FLIRT). Reorient to RAS canonical so axis-2 is always axial and
+        # FLIRT). Reorder to a clean RAS grid so axis-2 is always axial and
         # world-x sign is consistent for L/R assignment.
-        t1_mni = nib.as_closest_canonical(t1_img)
-        sel_mni = nib.as_closest_canonical(sel_img)
-        baseline_mni = nib.as_closest_canonical(mask_imgs[1]) if has_baseline else None
+        from nilearn.image import reorder_img
+        t1_mni = reorder_img(t1_img, resample="continuous")
+        sel_mni = reorder_img(sel_img, resample="nearest")
+        baseline_mni = reorder_img(mask_imgs[1], resample="nearest") if has_baseline else None
     else:
+        from nilearn.image import reorder_img
         t1_mni, masks_mni = register_to_mni(t1_img, mask_imgs, skip=skip_registration)
-        t1_mni = nib.as_closest_canonical(t1_mni)
-        sel_mni = nib.as_closest_canonical(masks_mni[0])
-        baseline_mni = nib.as_closest_canonical(masks_mni[1]) if has_baseline else None
+        t1_mni = reorder_img(t1_mni, resample="continuous")
+        sel_mni = reorder_img(masks_mni[0], resample="nearest")
+        baseline_mni = reorder_img(masks_mni[1], resample="nearest") if has_baseline else None
 
         # save MNI-space niftis (only when we produced them)
         nib.save(t1_mni, os.path.join(out_dir, f"{case_id}_T1_MNI.nii.gz"))
