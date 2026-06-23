@@ -222,24 +222,33 @@ def save_overlay(t1_img, sel_img, out_png, case_id):
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
+    # Images are already RAS-canonical at this point (axis 0=L-R, 1=P-A, 2=I-S).
     t1 = t1_img.get_fdata()
     sel = sel_img.get_fdata() > 0.5
-    # MNI x=0 plane in voxel space
-    inv = np.linalg.inv(t1_img.affine)
+    aff = t1_img.affine
+
+    # MNI x=0 midline in voxel space
+    inv = np.linalg.inv(aff)
     x0_vox = int(round((inv @ np.array([0, 0, 0, 1]))[0]))
 
+    # Pick axial slices (axis 2) where lesions exist
     sel_z = np.where(sel.any(axis=(0, 1)))[0]
     if sel_z.size:
         slices = np.linspace(sel_z.min(), sel_z.max(), min(6, sel_z.size)).astype(int)
     else:
         slices = np.linspace(t1.shape[2] * 0.3, t1.shape[2] * 0.7, 6).astype(int)
 
+    # In RAS canonical: axial slice = t1[:, :, z], displayed with
+    # rot90 to put anterior up; midline is a vertical line at x0_vox.
     fig, axes = plt.subplots(2, 3, figsize=(12, 8))
     for ax, z in zip(axes.ravel(), slices):
         ax.imshow(np.rot90(t1[:, :, z]), cmap="gray")
         overlay = np.ma.masked_where(~sel[:, :, z], sel[:, :, z])
         ax.imshow(np.rot90(overlay), cmap="autumn", alpha=0.8)
-        ax.axvline(x0_vox, color="cyan", lw=1, ls="--")  # midline
+        # rot90 flips axis-0 to become columns, so midline x-voxel maps to
+        # a vertical line at (shape[0]-1 - x0_vox) after rotation
+        midline_col = t1.shape[0] - 1 - x0_vox
+        ax.axvline(midline_col, color="cyan", lw=1, ls="--")
         ax.set_title(f"axial z={z}", fontsize=9)
         ax.axis("off")
     fig.suptitle(f"{case_id}: SEL overlay (cyan = MNI midline)", fontsize=13)
@@ -329,17 +338,16 @@ def process_case(case_id, t1_path, sel_path, baseline_path, out_dir,
 
     if no_resample:
         # Inputs are ALREADY registered to MNI by an external tool (e.g. FSL
-        # FLIRT). Count directly on the provided volumes using their native
-        # affine -- do NOT resample onto another grid (that would re-flip the
-        # L/R convention). World-x sign from the affine encodes Right(+)/Left(-)
-        # regardless of whether storage is RAS (nilearn) or LAS (FSL).
-        t1_mni = t1_img
-        sel_mni = sel_img
-        baseline_mni = mask_imgs[1] if has_baseline else None
+        # FLIRT). Reorient to RAS canonical so axis-2 is always axial and
+        # world-x sign is consistent for L/R assignment.
+        t1_mni = nib.as_closest_canonical(t1_img)
+        sel_mni = nib.as_closest_canonical(sel_img)
+        baseline_mni = nib.as_closest_canonical(mask_imgs[1]) if has_baseline else None
     else:
         t1_mni, masks_mni = register_to_mni(t1_img, mask_imgs, skip=skip_registration)
-        sel_mni = masks_mni[0]
-        baseline_mni = masks_mni[1] if has_baseline else None
+        t1_mni = nib.as_closest_canonical(t1_mni)
+        sel_mni = nib.as_closest_canonical(masks_mni[0])
+        baseline_mni = nib.as_closest_canonical(masks_mni[1]) if has_baseline else None
 
         # save MNI-space niftis (only when we produced them)
         nib.save(t1_mni, os.path.join(out_dir, f"{case_id}_T1_MNI.nii.gz"))
