@@ -43,6 +43,7 @@ REF=""
 PYTHON="python3"
 OUT="./results"
 KEEP=0
+FLIP_LR=0
 MANIFEST=""
 CASE_ID=""
 T1=""
@@ -68,6 +69,7 @@ while [[ $# -gt 0 ]]; do
     --ref)       REF="$2"; shift 2;;
     --python)    PYTHON="$2"; shift 2;;
     --keep-intermediate) KEEP=1; shift;;
+    --flip-lr)   FLIP_LR=1; shift;;
     -h|--help)   sed -n '2,40p' "$0"; exit 0;;
     *) echo "Unknown option: $1" >&2; exit 1;;
   esac
@@ -165,7 +167,9 @@ fi
 # Counting + Excel (registration already done -> --skip-registration)
 # ---------------------------------------------------------------------------
 echo "Running lateralization counting..." >&2
-"$PYTHON" "$PY_SCRIPT" --manifest "$MNI_MANIFEST" --no-resample --out "$OUT"
+EXTRA_ARGS=""
+[[ "$FLIP_LR" -eq 1 ]] && EXTRA_ARGS="--flip-lr"
+"$PYTHON" "$PY_SCRIPT" --manifest "$MNI_MANIFEST" --no-resample --out "$OUT" $EXTRA_ARGS
 
 ABS_OUT="$(cd "$OUT" && pwd)"
 echo "" >&2
