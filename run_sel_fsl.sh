@@ -43,7 +43,6 @@ REF=""
 PYTHON="python3"
 OUT="./results"
 KEEP=0
-FLIP_LR=0
 MANIFEST=""
 CASE_ID=""
 T1=""
@@ -69,7 +68,6 @@ while [[ $# -gt 0 ]]; do
     --ref)       REF="$2"; shift 2;;
     --python)    PYTHON="$2"; shift 2;;
     --keep-intermediate) KEEP=1; shift;;
-    --flip-lr)   FLIP_LR=1; shift;;
     -h|--help)   sed -n '2,40p' "$0"; exit 0;;
     *) echo "Unknown option: $1" >&2; exit 1;;
   esac
@@ -119,20 +117,30 @@ register_one() {
   local sel_mni="$REG_DIR/${cid}_SEL_MNI.nii.gz"
   local mat="$REG_DIR/${cid}_T1_to_MNI.mat"
 
+  # Reorient to standard orientation before FLIRT to avoid registration
+  # failures with non-standard input orientations (e.g. sagittal acquisitions).
+  local t1_std="$REG_DIR/${cid}_T1_std.nii.gz"
+  local sel_std="$REG_DIR/${cid}_SEL_std.nii.gz"
+  echo "  [$cid] Reorienting to standard orientation..." >&2
+  fslreorient2std "$t1" "$t1_std" >&2
+  fslreorient2std "$sel" "$sel_std" >&2
+
   echo "  [$cid] FLIRT T1 -> MNI (dof=$DOF, cost=$COST)..." >&2
-  flirt -in "$t1" -ref "$REF" -out "$t1_mni" -omat "$mat" \
+  flirt -in "$t1_std" -ref "$REF" -out "$t1_mni" -omat "$mat" \
         -dof "$DOF" -cost "$COST" \
         -searchrx -90 90 -searchry -90 90 -searchrz -90 90 >&2
 
   echo "  [$cid] Applying transform to SEL mask (nearestneighbour)..." >&2
-  flirt -in "$sel" -ref "$REF" -applyxfm -init "$mat" \
+  flirt -in "$sel_std" -ref "$REF" -applyxfm -init "$mat" \
         -interp nearestneighbour -out "$sel_mni" >&2
 
   local base_mni=""
   if [[ -n "$base" && -f "$base" ]]; then
+    local base_std="$REG_DIR/${cid}_baseline_std.nii.gz"
+    fslreorient2std "$base" "$base_std" >&2
     base_mni="$REG_DIR/${cid}_baseline_MNI.nii.gz"
     echo "  [$cid] Applying transform to baseline mask..." >&2
-    flirt -in "$base" -ref "$REF" -applyxfm -init "$mat" \
+    flirt -in "$base_std" -ref "$REF" -applyxfm -init "$mat" \
           -interp nearestneighbour -out "$base_mni" >&2
   fi
 
@@ -167,9 +175,7 @@ fi
 # Counting + Excel (registration already done -> --skip-registration)
 # ---------------------------------------------------------------------------
 echo "Running lateralization counting..." >&2
-EXTRA_ARGS=""
-[[ "$FLIP_LR" -eq 1 ]] && EXTRA_ARGS="--flip-lr"
-"$PYTHON" "$PY_SCRIPT" --manifest "$MNI_MANIFEST" --no-resample --out "$OUT" $EXTRA_ARGS
+"$PYTHON" "$PY_SCRIPT" --manifest "$MNI_MANIFEST" --no-resample --out "$OUT"
 
 ABS_OUT="$(cd "$OUT" && pwd)"
 echo "" >&2
