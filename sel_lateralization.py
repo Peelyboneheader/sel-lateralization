@@ -166,7 +166,7 @@ def _apply_affine(vol, mat, order=1):
 # --------------------------------------------------------------------------- #
 # Lesion counting / lateralization
 # --------------------------------------------------------------------------- #
-def count_lesions_by_side(sel_img, midline_tol_mm=2.0, min_voxels=3):
+def count_lesions_by_side(sel_img, midline_tol_mm=2.0, min_voxels=1):
     """
     Label connected components in the SEL mask and assign each to a hemisphere
     using its centroid's world-x (MNI) coordinate.
